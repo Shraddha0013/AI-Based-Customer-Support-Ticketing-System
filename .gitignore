@@ -1,0 +1,12 @@
+node_modules/
+.next/
+dist/
+.env
+.env.local
+__pycache__/
+*.pyc
+.venv/
+ml-service/models/*.joblib
+ml-service/models/metrics.json
+*.log
+.DS_Store

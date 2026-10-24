@@ -1,0 +1,62 @@
+name: ai-ticketing
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ml-service:
+    build: ./ml-service
+    restart: unless-stopped
+    environment:
+      PORT: "8000"
+      MODEL_PATH: models/model.joblib
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      PORT: "4000"
+      MONGO_URI: mongodb://mongo:27017/ticketing
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-in-production}
+      JWT_EXPIRES_IN: 8h
+      ML_SERVICE_URL: http://ml-service:8000
+      ML_TIMEOUT_MS: "3000"
+      CORS_ORIGIN: http://localhost:3000
+      AUTO_SEED: "true"
+    ports:
+      - "4000:4000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      # started (not healthy): the API deliberately keeps working with keyword rules if ML is down
+      ml-service:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:
